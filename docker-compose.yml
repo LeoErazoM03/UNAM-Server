@@ -74,13 +74,13 @@ services:
       dockerfile: Dockerfile
       args:
         # Para build time, usar el dominio público con HTTPS servido por Nginx
-        NEXT_PUBLIC_BACKEND_URL: https://eskani.enesmorelia.unam.mx
-        NEXT_PUBLIC_GRAPHQL_ENDPOINT: https://eskani.enesmorelia.unam.mx/graphql
+        NEXT_PUBLIC_BACKEND_URL: http://localhost:3000
+        NEXT_PUBLIC_GRAPHQL_ENDPOINT: http://localhost:3000/graphql
     environment:
       NODE_ENV: production
       # Para runtime, usar el dominio público con HTTPS para el navegador del cliente
-      NEXT_PUBLIC_BACKEND_URL: https://eskani.enesmorelia.unam.mx
-      NEXT_PUBLIC_GRAPHQL_ENDPOINT: https://eskani.enesmorelia.unam.mx/graphql
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:3000
+      NEXT_PUBLIC_GRAPHQL_ENDPOINT: http://localhost:3000/graphql
       # Para SSR, usar conexión interna de Docker
       SERVER_GRAPHQL_ENDPOINT: http://backend:3000/graphql
       # Increase Node heap memory for Next.js
