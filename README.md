@@ -27,6 +27,8 @@ cp .env.template .env
 2. Ajusta variables según tu entorno (ejemplos):
 - DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD, DB_NAME
 - JWT_SECRET
+- FRONTEND_APP_URL
+- SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM
 
 > Las variables definidas en `.env` son utilizadas por Docker Compose y los servicios.
 
@@ -113,6 +115,7 @@ yarn test
 - Backend expone solo GraphQL (prohibido usar backend de Next.js).
 - Puertos fijos: frontend 3001 y backend 3000.
 - Validaciones con Zod.
+- El registro de usuarios requiere configurar SMTP para enviar correos de verificación y activar la cuenta antes del primer login.
 - UI con componentes shadcn/ui, sin animaciones ni colores personalizados.
 - Notificaciones con Sonner.
 - Pide solo los campos necesarios del schema GraphQL.

@@ -36,6 +36,16 @@ export class User {
   @Field(() => Boolean)
   isActive: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  @Field(() => Boolean)
+  emailVerified: boolean;
+
+  @Column({ nullable: true })
+  emailVerificationToken?: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  emailVerificationExpiresAt?: Date | null;
+
   // Campo para asignar idioma específico a usuarios admin (mantener por compatibilidad)
   @Column({ nullable: true })
   @Field(() => ID, { nullable: true })
