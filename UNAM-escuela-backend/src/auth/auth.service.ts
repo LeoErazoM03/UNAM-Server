@@ -5,6 +5,7 @@ import { LoginInput, SignupInput } from './dto/inputs';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { User } from 'src/users/entities/user.entity';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -13,7 +14,7 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
-  ) {}
+  ) { }
 
   private getJwtToken(userId: string) {
     return this.jwtService.sign({ id: userId });
@@ -22,12 +23,30 @@ export class AuthService {
   async signup(signupInput: SignupInput): Promise<AuthResponse> {
     try {
       this.logger.log(`Intento de registro para email: ${signupInput.email}`);
-      const user = await this.usersService.create(signupInput);
-      const token = this.getJwtToken(user.id);
+
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationExpires = new Date(Date.now() + 1000 * 60 * 60); // 1 hora
+
+      const user = await this.usersService.create({
+        ...signupInput,
+      } as any);
+
+      // Asignar valores correctos
+      user.is_verified = false;
+      user.verification_token = verificationToken;
+      user.verification_token_expires = verificationExpires;
+
+      // usar método real del service
+      await this.usersService.save(user);
+
       this.logger.log(
-        `Registro exitoso para usuario: ${user.email} (ID: ${user.id})`,
+        `Usuario creado (pendiente de verificación): ${user.email}`,
       );
-      return { token, user };
+
+      // ❗ NO regreses token si no está verificado
+      return {
+        user,
+      };
     } catch (error) {
       this.logger.error(
         `Error en registro para email: ${signupInput.email} - ${error.message}`,
@@ -42,25 +61,24 @@ export class AuthService {
       this.logger.log(`Intento de login para email: ${email}`);
 
       const user = await this.usersService.findOneByEmail(email);
+
       if (!bcrypt.compareSync(password, user.password)) {
-        this.logger.warn(`Credenciales incorrectas para email: ${email}`);
-        throw new Error('Email o password no es correcto');
+        throw new UnauthorizedException('Credenciales incorrectas');
       }
 
-      // Verificar si el usuario está activo antes de permitir login
-      if (!user.isActive) {
-        this.logger.warn(
-          `Usuario bloqueado intentó hacer login: ${user.email} (ID: ${user.id})`,
-        );
+      // ❗ bloquear si no verificó
+      if (!user.is_verified) {
         throw new UnauthorizedException(
-          'Esta cuenta está suspendida temporalmente. Contáctese con un administrador para más detalles.',
+          'Debes verificar tu correo antes de iniciar sesión',
         );
+      }
+
+      if (!user.isActive) {
+        throw new UnauthorizedException('Cuenta suspendida');
       }
 
       const token = this.getJwtToken(user.id);
-      this.logger.log(
-        `Login exitoso para usuario: ${user.email} (ID: ${user.id}) - Roles: ${user.roles.join(', ')}`,
-      );
+
       return { token, user };
     } catch (error) {
       this.logger.error(
@@ -70,68 +88,75 @@ export class AuthService {
     }
   }
 
-  async validateUser(id: string): Promise<User> {
+  // VERIFICACIÓN DE EMAIL
+  async verifyEmail(token: string): Promise<boolean> {
     try {
-      this.logger.log(`Validando usuario con ID: ${id}`);
-      const user = await this.usersService.findOneById(id);
-      if (!user.isActive) {
-        this.logger.warn(
-          `Usuario inactivo intentó acceder: ${user.email} (ID: ${id})`,
-        );
-        throw new UnauthorizedException(
-          'Esta cuenta está suspendida temporalmente. Contáctese con un administrador para más detalles.',
-        );
+      const user = await this.usersService.findByVerificationToken(token);
+
+      if (!user) {
+        throw new UnauthorizedException('Token inválido');
       }
-      delete (user as any).password;
-      this.logger.log(
-        `Usuario validado exitosamente: ${user.email} (ID: ${id})`,
-      );
-      return user;
+
+      if (
+        !user.verification_token_expires ||
+        user.verification_token_expires < new Date()
+      ) {
+        throw new UnauthorizedException('Token expirado');
+      }
+
+      user.is_verified = true;
+
+      // ⚠️ NO usar null → usa undefined
+      user.verification_token = undefined;
+      user.verification_token_expires = undefined;
+
+      await this.usersService.save(user);
+
+      this.logger.log(`Usuario verificado: ${user.email}`);
+
+      return true;
     } catch (error) {
-      this.logger.error(`Error validando usuario ID: ${id} - ${error.message}`);
+      this.logger.error(`Error verificando email: ${error.message}`);
       throw error;
     }
   }
 
+  async validateUser(id: string): Promise<User> {
+    const user = await this.usersService.findOneById(id);
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('Cuenta suspendida');
+    }
+
+    delete (user as any).password;
+
+    return user;
+  }
+
   revalidateToken(user: User | null): AuthResponse {
     if (!user) {
-      this.logger.log('Intento de revalidación sin usuario autenticado');
-      throw new UnauthorizedException('Usuario no autenticado, por favor inicie sesión');
+      throw new UnauthorizedException('Usuario no autenticado');
     }
-    
-    this.logger.log(
-      `Revalidando token para usuario: ${user.email} (ID: ${user.id})`,
-    );
+
     const token = this.getJwtToken(user.id);
     return { token, user };
   }
 
   async revalidateTokenFromString(token?: string): Promise<AuthResponse> {
     if (!token) {
-      this.logger.log('Intento de revalidación sin token');
-      throw new UnauthorizedException('Usuario no autenticado, por favor inicie sesión');
+      throw new UnauthorizedException('Usuario no autenticado');
     }
 
     try {
-      // Remover 'Bearer ' si está presente
       const cleanToken = token.replace('Bearer ', '');
-      
-      // Verificar y decodificar el token
       const payload = this.jwtService.verify(cleanToken);
-      
-      // Obtener el usuario usando el ID del token
       const user = await this.validateUser(payload.id);
-      
-      this.logger.log(
-        `Revalidando token para usuario: ${user.email} (ID: ${user.id})`,
-      );
-      
-      // Generar un nuevo token
+
       const newToken = this.getJwtToken(user.id);
+
       return { token: newToken, user };
-    } catch (error) {
-      this.logger.error(`Error revalidando token: ${error.message}`);
-      throw new UnauthorizedException('Token inválido o expirado, por favor inicie sesión nuevamente');
+    } catch {
+      throw new UnauthorizedException('Token inválido o expirado');
     }
   }
 }

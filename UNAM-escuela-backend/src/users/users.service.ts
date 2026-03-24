@@ -22,7 +22,7 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
-  ) {}
+  ) { }
 
   async create(signupInput: SignupInput): Promise<User> {
     try {
@@ -45,17 +45,21 @@ export class UsersService {
     }
   }
 
+  async save(user: User): Promise<User> {
+    return this.usersRepository.save(user);
+  }
+
   async findAll(roles: ValidRoles[], requestingUser?: User): Promise<User[]> {
     console.log('[DEBUG] findAll called with roles:', roles);
     console.log(
       '[DEBUG] requestingUser:',
       requestingUser
         ? {
-            id: requestingUser.id,
-            email: requestingUser.email,
-            roles: requestingUser.roles,
-            assignedLanguageId: requestingUser.assignedLanguageId,
-          }
+          id: requestingUser.id,
+          email: requestingUser.email,
+          roles: requestingUser.roles,
+          assignedLanguageId: requestingUser.assignedLanguageId,
+        }
         : 'null',
     );
 
@@ -258,6 +262,26 @@ export class UsersService {
     }
   }
 
+  async findByVerificationToken(token: string): Promise<User> {
+    try {
+      this.logger.log(`Buscando usuario por verification token`);
+
+      const user = await this.usersRepository.findOne({
+        where: { verification_token: token },
+      });
+
+      if (!user) {
+        this.logger.warn(`Token no encontrado`);
+        throw new NotFoundException('Token inválido');
+      }
+
+      return user;
+    } catch (error) {
+      this.logger.error(`Error buscando por token: ${error.message}`);
+      throw error;
+    }
+  }
+
   async findOneById(id: string): Promise<User> {
     try {
       this.logger.log(`Buscando usuario por ID: ${id}`);
@@ -417,19 +441,19 @@ export class UsersService {
     // Validar email único si se proporciona
     if (email && email.trim()) {
       const emailToCheck = email.trim().toLowerCase();
-      
+
       // Solo validar si el email es diferente al actual
       if (emailToCheck !== userToUpdate.email.toLowerCase()) {
         const existingUser = await this.usersRepository.findOne({
           where: { email: emailToCheck },
         });
-        
+
         if (existingUser) {
           throw new BadRequestException(
             'Ya existe un usuario con este email',
           );
         }
-        
+
         userToUpdate.email = emailToCheck;
       }
     }
@@ -735,7 +759,7 @@ export class UsersService {
   async deleteUser(id: string, superUser: User): Promise<User> {
     try {
       this.logger.log(`SuperUser ${superUser.email} attempting to delete user with ID: ${id}`);
-      
+
       // Verificar que el usuario que ejecuta la acción sea superUser
       if (!superUser.roles.includes(ValidRoles.superUser)) {
         throw new BadRequestException('Solo los superUsuarios pueden eliminar usuarios');
@@ -763,12 +787,12 @@ export class UsersService {
 
       // Guardar una copia del usuario antes de eliminarlo
       const deletedUserData = { ...userToDelete };
-      
+
       // Eliminar el usuario de la base de datos
       await this.usersRepository.remove(userToDelete);
-      
+
       this.logger.log(`Usuario ${deletedUserData.email} (ID: ${id}) eliminado exitosamente por ${superUser.email}`);
-      
+
       return deletedUserData;
     } catch (error) {
       this.logger.error(`Error eliminando usuario con ID: ${id} - ${error.message}`);
