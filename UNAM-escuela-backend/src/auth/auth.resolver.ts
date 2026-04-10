@@ -10,7 +10,7 @@ import { ValidRoles } from './enums/valid-roles.enum';
 
 @Resolver()
 export class AuthResolver {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Mutation(() => AuthResponse, { name: 'signin' })
   signup(@Args('signUpInput') signupInput: SignupInput): Promise<AuthResponse> {
@@ -23,7 +23,15 @@ export class AuthResolver {
   }
 
   @Query(() => AuthResponse, { name: 'revalidate' })
-  async revalidateToken(@Args('token', { nullable: true }) token?: string): Promise<AuthResponse> {
+  async revalidateToken(
+    @Args('token', { nullable: true }) token?: string,
+  ): Promise<AuthResponse> {
     return this.authService.revalidateTokenFromString(token);
+  }
+
+  // NUEVA MUTATION
+  @Mutation(() => Boolean, { name: 'verifyEmail' })
+  verifyEmail(@Args('token') token: string): Promise<boolean> {
+    return this.authService.verifyEmail(token);
   }
 }
