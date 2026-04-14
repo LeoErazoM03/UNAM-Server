@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from 'next/navigation';
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -7,11 +8,11 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { 
-  validateSignupForm, 
+import {
+  validateSignupForm,
   validateLoginForm,
   type SignupFormData,
-  type LoginFormData 
+  type LoginFormData
 } from '@/schemas/user-forms';
 
 interface AuthModalProps {
@@ -22,6 +23,7 @@ interface AuthModalProps {
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode }) => {
   const { login, signup, isLoading } = useAuth();
+  const router = useRouter();
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -68,14 +70,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, mode }) =
       result = await signup(formData.fullName, formData.email, formData.password);
     }
 
-    if (result.success) {
+    console.log('AUTH MODAL RESULT:', result);
+
+    if (!result.success) {
+      toast.error(result.error || 'Ocurrió un error');
+      return;
+    }
+
+    if (mode === 'register') {
+      const emailToVerify = formData.email.trim();
+
       onClose();
       setFormData({ fullName: '', email: '', password: '' });
       setErrors({});
-      toast.success(mode === 'login' ? 'Sesión iniciada exitosamente' : 'Cuenta creada exitosamente');
-    } else {
-      toast.error(result.error || 'Ocurrió un error');
+      toast.success('Cuenta creada. Revisa tu correo para verificarla.');
+      router.push(`/verificar-email?email=${encodeURIComponent(emailToVerify)}`);
+      return;
     }
+
+    onClose();
+    setFormData({ fullName: '', email: '', password: '' });
+    setErrors({});
+    toast.success('Sesión iniciada exitosamente');
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

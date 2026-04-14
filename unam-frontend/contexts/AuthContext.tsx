@@ -17,8 +17,11 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signup: (fullName: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
+  signup: (
+    fullName: string,
+    email: string,
+    password: string
+  ) => Promise<{ success: boolean; error?: string; requiresVerification?: boolean; email?: string }>; logout: () => void;
   isLoading: boolean;
   redirectBasedOnRole: (user: User) => void;
 }
@@ -119,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       const data = await response.json();
-      
+
       if (data.errors) {
         // Mostrar toast de error en lugar de lanzar excepción
         toast.error('Sesión expirada', {
@@ -133,7 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userData);
       setToken(data.data.revalidate.token);
       setCookie('auth_token', data.data.revalidate.token, 7);
-      
+
       // Solo redireccionar si estamos en la página de dashboard (página inicial)
       if (window.location.pathname === '/dashboard') {
         redirectBasedOnRole(userData);
@@ -176,14 +179,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       const data = await response.json();
-      
+
       if (data.errors) {
         // Transformar errores de GraphQL en mensajes más amigables
         const errorMessage = data.errors[0].message;
-        if (errorMessage.includes('Invalid credentials') || 
-            errorMessage.includes('password') || 
-            errorMessage.includes('email') ||
-            errorMessage.includes('User not found')) {
+        if (errorMessage.includes('Invalid credentials') ||
+          errorMessage.includes('password') ||
+          errorMessage.includes('email') ||
+          errorMessage.includes('User not found')) {
           return { success: false, error: 'Email o contraseña incorrectos' };
         }
         return { success: false, error: 'Error al iniciar sesión. Inténtalo de nuevo.' };
@@ -193,10 +196,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userData);
       setToken(data.data.login.token);
       setCookie('auth_token', data.data.login.token, 7);
-      
+
       // Redireccionar automáticamente basado en el rol
       redirectBasedOnRole(userData);
-      
+
       return { success: true };
     } catch (error: unknown) {
       console.error('Login failed:', error);
@@ -206,7 +209,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signup = async (fullName: string, email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const signup = async (
+    fullName: string,
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; error?: string; requiresVerification?: boolean; email?: string }> => {
     setIsLoading(true);
     try {
       const response = await fetch(GRAPHQL_ENDPOINT, {
@@ -236,13 +243,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       const data = await response.json();
-      
+
       if (data.errors) {
         // Transformar errores de GraphQL en mensajes más amigables
         const errorMessage = data.errors[0].message;
-        if (errorMessage.includes('already exists') || 
-            errorMessage.includes('duplicate') ||
-            errorMessage.includes('email')) {
+        if (errorMessage.includes('already exists') ||
+          errorMessage.includes('duplicate') ||
+          errorMessage.includes('email')) {
           return { success: false, error: 'Este email ya está registrado' };
         }
         if (errorMessage.includes('password')) {
@@ -251,9 +258,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: 'Error al registrarse. Inténtalo de nuevo.' };
       }
 
-      setUser(data.data.signin.user);
-      setToken(data.data.signin.token);
-      setCookie('auth_token', data.data.signin.token, 7);
+      const signInData = data?.data?.signin;
+
+      if (!signInData?.user) {
+        return { success: false, error: 'No se pudo completar el registro.' };
+      }
+
+      // Si el backend no devuelve token, significa que el usuario debe verificar su correo
+      if (!signInData.token) {
+        return {
+          success: true,
+          requiresVerification: true,
+          email,
+        };
+      }
+
+      // Fallback por si en algún flujo futuro sí devuelve token
+      setUser(signInData.user);
+      setToken(signInData.token);
+      setCookie('auth_token', signInData.token, 7);
+
       return { success: true };
     } catch (error: unknown) {
       console.error('Signup failed:', error);
