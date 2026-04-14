@@ -29,9 +29,18 @@ export class AuthResolver {
     return this.authService.revalidateTokenFromString(token);
   }
 
-  // NUEVA MUTATION
-  @Mutation(() => Boolean, { name: 'verifyEmail' })
-  verifyEmail(@Args('token') token: string): Promise<boolean> {
-    return this.authService.verifyEmail(token);
+  @Mutation(() => Boolean, { name: 'verifyEmailCode' })
+  verifyEmailCode(
+    @Args('email') email: string,
+    @Args('code') code: string,
+  ): Promise<boolean> {
+    return this.authService.verifyEmailCode(email, code);
+  }
+
+  @Mutation(() => Boolean, { name: 'resendVerificationCode' })
+  resendVerificationCode(
+    @Args('email') email: string,
+  ): Promise<boolean> {
+    return this.authService.resendVerificationCode(email);
   }
 }

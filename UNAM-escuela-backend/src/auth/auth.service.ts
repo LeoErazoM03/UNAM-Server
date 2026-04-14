@@ -1,11 +1,11 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger, BadRequestException } from '@nestjs/common';
 import { AuthResponse } from './types/auth-response.type';
 import { UsersService } from 'src/users/users.service';
 import { LoginInput, SignupInput } from './dto/inputs';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { User } from 'src/users/entities/user.entity';
-import * as crypto from 'crypto';
+import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class AuthService {
@@ -14,36 +14,49 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly mailService: MailService,
   ) { }
 
   private getJwtToken(userId: string) {
     return this.jwtService.sign({ id: userId });
   }
 
+  private generateVerificationCode(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
+  private async hashVerificationCode(code: string): Promise<string> {
+    return bcrypt.hash(code, 10);
+  }
+
   async signup(signupInput: SignupInput): Promise<AuthResponse> {
     try {
       this.logger.log(`Intento de registro para email: ${signupInput.email}`);
 
-      const verificationToken = crypto.randomBytes(32).toString('hex');
-      const verificationExpires = new Date(Date.now() + 1000 * 60 * 60); // 1 hora
+      const user = await this.usersService.create(signupInput);
 
-      const user = await this.usersService.create({
-        ...signupInput,
-      } as any);
+      const verificationCode = this.generateVerificationCode();
+      const verificationCodeHash = await this.hashVerificationCode(verificationCode);
+      const verificationCodeExpires = new Date(Date.now() + 1000 * 60 * 60); // 1 hora
 
-      // Asignar valores correctos
       user.is_verified = false;
-      user.verification_token = verificationToken;
-      user.verification_token_expires = verificationExpires;
+      user.verification_code_hash = verificationCodeHash;
+      user.verification_code_expires = verificationCodeExpires;
+      user.verification_attempts = 0;
+      user.verification_last_sent_at = new Date();
 
-      // usar método real del service
       await this.usersService.save(user);
 
       this.logger.log(
-        `Usuario creado (pendiente de verificación): ${user.email}`,
+        `Usuario creado pendiente de verificación: ${user.email} (ID: ${user.id})`,
       );
 
-      // ❗ NO regreses token si no está verificado
+      await this.mailService.sendVerificationCode(
+        user.email,
+        user.fullName,
+        verificationCode,
+      );
+
       return {
         user,
       };
@@ -60,13 +73,11 @@ export class AuthService {
       const { email, password } = loginInput;
       this.logger.log(`Intento de login para email: ${email}`);
 
-      const user = await this.usersService.findOneByEmail(email);
-
+      const user = await this.usersService.findOneByEmailWithVerificationCode(email);
       if (!bcrypt.compareSync(password, user.password)) {
         throw new UnauthorizedException('Credenciales incorrectas');
       }
 
-      // ❗ bloquear si no verificó
       if (!user.is_verified) {
         throw new UnauthorizedException(
           'Debes verificar tu correo antes de iniciar sesión',
@@ -79,6 +90,8 @@ export class AuthService {
 
       const token = this.getJwtToken(user.id);
 
+      this.logger.log(`Login exitoso para usuario: ${user.email} (ID: ${user.id})`);
+
       return { token, user };
     } catch (error) {
       this.logger.error(
@@ -89,30 +102,46 @@ export class AuthService {
   }
 
   // VERIFICACIÓN DE EMAIL
-  async verifyEmail(token: string): Promise<boolean> {
+  async verifyEmailCode(email: string, code: string): Promise<boolean> {
     try {
-      const user = await this.usersService.findByVerificationToken(token);
-
-      if (!user) {
-        throw new UnauthorizedException('Token inválido');
+      const user = await this.usersService.findOneByEmailWithVerificationCode(email);
+      if (user.is_verified) {
+        throw new BadRequestException('Este correo ya fue verificado');
       }
 
-      if (
-        !user.verification_token_expires ||
-        user.verification_token_expires < new Date()
-      ) {
-        throw new UnauthorizedException('Token expirado');
+      if (!user.verification_code_hash || !user.verification_code_expires) {
+        throw new BadRequestException(
+          'No existe un código de verificación activo para esta cuenta',
+        );
+      }
+
+      if (user.verification_code_expires < new Date()) {
+        throw new UnauthorizedException('El código de verificación expiró');
+      }
+
+      if (user.verification_attempts >= 5) {
+        throw new UnauthorizedException(
+          'Se alcanzó el máximo de intentos de verificación',
+        );
+      }
+
+      const isValidCode = await bcrypt.compare(code, user.verification_code_hash);
+
+      if (!isValidCode) {
+        user.verification_attempts += 1;
+        await this.usersService.save(user);
+        throw new UnauthorizedException('Código de verificación incorrecto');
       }
 
       user.is_verified = true;
-
-      // ⚠️ NO usar null → usa undefined
-      user.verification_token = undefined;
-      user.verification_token_expires = undefined;
+      user.verification_code_hash = undefined;
+      user.verification_code_expires = undefined;
+      user.verification_attempts = 0;
+      user.verification_last_sent_at = undefined;
 
       await this.usersService.save(user);
 
-      this.logger.log(`Usuario verificado: ${user.email}`);
+      this.logger.log(`Usuario verificado correctamente: ${user.email}`);
 
       return true;
     } catch (error) {
@@ -121,8 +150,58 @@ export class AuthService {
     }
   }
 
+
+  // REENVÍO DE CÓDIGO
+  async resendVerificationCode(email: string): Promise<boolean> {
+    try {
+      const user = await this.usersService.findOneByEmailWithVerificationCode(email);
+      if (user.is_verified) {
+        throw new BadRequestException('Este correo ya fue verificado');
+      }
+
+      const now = new Date();
+
+      if (
+        user.verification_last_sent_at &&
+        now.getTime() - new Date(user.verification_last_sent_at).getTime() < 60 * 1000
+      ) {
+        throw new BadRequestException(
+          'Debes esperar al menos 1 minuto antes de solicitar otro código',
+        );
+      }
+
+      const verificationCode = this.generateVerificationCode();
+      const verificationCodeHash = await this.hashVerificationCode(verificationCode);
+      const verificationCodeExpires = new Date(Date.now() + 1000 * 60 * 60);
+
+      user.verification_code_hash = verificationCodeHash;
+      user.verification_code_expires = verificationCodeExpires;
+      user.verification_attempts = 0;
+      user.verification_last_sent_at = now;
+
+      await this.usersService.save(user);
+
+      await this.mailService.sendVerificationCode(
+        user.email,
+        user.fullName,
+        verificationCode,
+      );
+
+      this.logger.log(`Código de verificación reenviado para ${user.email}`);
+
+      return true;
+    } catch (error) {
+      this.logger.error(`Error reenviando código: ${error.message}`);
+      throw error;
+    }
+  }
+
   async validateUser(id: string): Promise<User> {
     const user = await this.usersService.findOneById(id);
+
+    if (!user.is_verified) {
+      throw new UnauthorizedException('Correo no verificado');
+    }
 
     if (!user.isActive) {
       throw new UnauthorizedException('Cuenta suspendida');

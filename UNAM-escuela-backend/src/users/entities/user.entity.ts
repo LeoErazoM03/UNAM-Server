@@ -63,11 +63,18 @@ export class User {
   @Field(() => Boolean)
   is_verified: boolean;
 
-  @Column({ nullable: true })
-  @Field(() => String, { nullable: true })
-  verification_token?: string;
+  @Column({ nullable: true, select: false })
+  verification_code_hash?: string;
 
   @Column({ type: 'timestamp', nullable: true })
   @Field(() => Date, { nullable: true })
-  verification_token_expires?: Date;
+  verification_code_expires?: Date;
+
+  @Column({ type: 'int', default: 0 })
+  @Field(() => Number)
+  verification_attempts: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  @Field(() => Date, { nullable: true })
+  verification_last_sent_at?: Date;
 }

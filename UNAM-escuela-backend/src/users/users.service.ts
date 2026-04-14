@@ -30,11 +30,11 @@ export class UsersService {
       const newUser = this.usersRepository.create({
         ...signupInput,
         password: bcrypt.hashSync(signupInput.password, 10),
-        roles: ['mortal'], // Asignar automáticamente el rol de usuario normal
+        roles: ['alumno'], // Asigna automáticamente el rol de alumno
       });
       const savedUser = await this.usersRepository.save(newUser);
       this.logger.log(
-        `Usuario creado exitosamente: ${savedUser.email} (ID: ${savedUser.id}) con rol de usuario normal`,
+        `Usuario creado exitosamente: ${savedUser.email} (ID: ${savedUser.id}) con rol de alumno`,
       );
       return savedUser;
     } catch (error) {
@@ -125,6 +125,31 @@ export class UsersService {
     });
 
     return users;
+  }
+
+  // BUSCAR USUARIO POR EMAIL CON CÓDIGO DE VERIFICACIÓN
+  async findOneByEmailWithVerificationCode(email: string): Promise<User> {
+    try {
+      this.logger.log(`Buscando usuario por email con código de verificación: ${email}`);
+
+      const user = await this.usersRepository
+        .createQueryBuilder('user')
+        .addSelect('user.verification_code_hash')
+        .where('LOWER(user.email) = LOWER(:email)', { email })
+        .getOne();
+
+      if (!user) {
+        this.logger.warn(`Usuario no encontrado con email: ${email}`);
+        throw new NotFoundException('El usuario con este email no existe');
+      }
+
+      return user;
+    } catch (error) {
+      this.logger.error(
+        `Error buscando usuario por email con código de verificación: ${email} - ${error.message}`,
+      );
+      throw error;
+    }
   }
 
   async findPaginated(
@@ -262,25 +287,6 @@ export class UsersService {
     }
   }
 
-  async findByVerificationToken(token: string): Promise<User> {
-    try {
-      this.logger.log(`Buscando usuario por verification token`);
-
-      const user = await this.usersRepository.findOne({
-        where: { verification_token: token },
-      });
-
-      if (!user) {
-        this.logger.warn(`Token no encontrado`);
-        throw new NotFoundException('Token inválido');
-      }
-
-      return user;
-    } catch (error) {
-      this.logger.error(`Error buscando por token: ${error.message}`);
-      throw error;
-    }
-  }
 
   async findOneById(id: string): Promise<User> {
     try {
