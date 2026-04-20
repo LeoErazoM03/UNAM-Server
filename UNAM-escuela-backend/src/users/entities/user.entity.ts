@@ -36,18 +36,15 @@ export class User {
   @Field(() => Boolean)
   isActive: boolean;
 
-  // Campo para asignar idioma específico a usuarios admin (mantener por compatibilidad)
   @Column({ nullable: true })
   @Field(() => ID, { nullable: true })
   assignedLanguageId?: string;
 
-  // Relación con el idioma asignado (mantener por compatibilidad)
   @ManyToOne(() => Lenguage, { nullable: true })
   @JoinColumn({ name: 'assignedLanguageId' })
   @Field(() => Lenguage, { nullable: true })
   assignedLanguage?: Lenguage;
 
-  // Nuevos campos para múltiples idiomas
   @ManyToMany(() => Lenguage, { nullable: true })
   @JoinTable({
     name: 'user_assigned_languages',
@@ -61,4 +58,23 @@ export class User {
   @JoinColumn({ name: 'lastUpdateBy' })
   @Field(() => User, { nullable: true })
   lastUpdateBy?: User;
+
+  @Column({ default: false })
+  @Field(() => Boolean)
+  is_verified: boolean;
+
+  @Column({ nullable: true, select: false })
+  verification_code_hash?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  @Field(() => Date, { nullable: true })
+  verification_code_expires?: Date;
+
+  @Column({ type: 'int', default: 0 })
+  @Field(() => Number)
+  verification_attempts: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  @Field(() => Date, { nullable: true })
+  verification_last_sent_at?: Date;
 }

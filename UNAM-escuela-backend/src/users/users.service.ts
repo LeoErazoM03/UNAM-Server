@@ -22,7 +22,7 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
-  ) {}
+  ) { }
 
   async create(signupInput: SignupInput): Promise<User> {
     try {
@@ -30,11 +30,11 @@ export class UsersService {
       const newUser = this.usersRepository.create({
         ...signupInput,
         password: bcrypt.hashSync(signupInput.password, 10),
-        roles: ['mortal'], // Asignar automáticamente el rol de usuario normal
+        roles: ['alumno'], // Asigna automáticamente el rol de alumno
       });
       const savedUser = await this.usersRepository.save(newUser);
       this.logger.log(
-        `Usuario creado exitosamente: ${savedUser.email} (ID: ${savedUser.id}) con rol de usuario normal`,
+        `Usuario creado exitosamente: ${savedUser.email} (ID: ${savedUser.id}) con rol de alumno`,
       );
       return savedUser;
     } catch (error) {
@@ -45,17 +45,21 @@ export class UsersService {
     }
   }
 
+  async save(user: User): Promise<User> {
+    return this.usersRepository.save(user);
+  }
+
   async findAll(roles: ValidRoles[], requestingUser?: User): Promise<User[]> {
     console.log('[DEBUG] findAll called with roles:', roles);
     console.log(
       '[DEBUG] requestingUser:',
       requestingUser
         ? {
-            id: requestingUser.id,
-            email: requestingUser.email,
-            roles: requestingUser.roles,
-            assignedLanguageId: requestingUser.assignedLanguageId,
-          }
+          id: requestingUser.id,
+          email: requestingUser.email,
+          roles: requestingUser.roles,
+          assignedLanguageId: requestingUser.assignedLanguageId,
+        }
         : 'null',
     );
 
@@ -121,6 +125,31 @@ export class UsersService {
     });
 
     return users;
+  }
+
+  // BUSCAR USUARIO POR EMAIL CON CÓDIGO DE VERIFICACIÓN
+  async findOneByEmailWithVerificationCode(email: string): Promise<User> {
+    try {
+      this.logger.log(`Buscando usuario por email con código de verificación: ${email}`);
+
+      const user = await this.usersRepository
+        .createQueryBuilder('user')
+        .addSelect('user.verification_code_hash')
+        .where('LOWER(user.email) = LOWER(:email)', { email })
+        .getOne();
+
+      if (!user) {
+        this.logger.warn(`Usuario no encontrado con email: ${email}`);
+        throw new NotFoundException('El usuario con este email no existe');
+      }
+
+      return user;
+    } catch (error) {
+      this.logger.error(
+        `Error buscando usuario por email con código de verificación: ${email} - ${error.message}`,
+      );
+      throw error;
+    }
   }
 
   async findPaginated(
@@ -257,6 +286,7 @@ export class UsersService {
       throw new NotFoundException(`El usuario con este email no existe`);
     }
   }
+
 
   async findOneById(id: string): Promise<User> {
     try {
@@ -417,19 +447,19 @@ export class UsersService {
     // Validar email único si se proporciona
     if (email && email.trim()) {
       const emailToCheck = email.trim().toLowerCase();
-      
+
       // Solo validar si el email es diferente al actual
       if (emailToCheck !== userToUpdate.email.toLowerCase()) {
         const existingUser = await this.usersRepository.findOne({
           where: { email: emailToCheck },
         });
-        
+
         if (existingUser) {
           throw new BadRequestException(
             'Ya existe un usuario con este email',
           );
         }
-        
+
         userToUpdate.email = emailToCheck;
       }
     }
@@ -735,7 +765,7 @@ export class UsersService {
   async deleteUser(id: string, superUser: User): Promise<User> {
     try {
       this.logger.log(`SuperUser ${superUser.email} attempting to delete user with ID: ${id}`);
-      
+
       // Verificar que el usuario que ejecuta la acción sea superUser
       if (!superUser.roles.includes(ValidRoles.superUser)) {
         throw new BadRequestException('Solo los superUsuarios pueden eliminar usuarios');
@@ -763,12 +793,12 @@ export class UsersService {
 
       // Guardar una copia del usuario antes de eliminarlo
       const deletedUserData = { ...userToDelete };
-      
+
       // Eliminar el usuario de la base de datos
       await this.usersRepository.remove(userToDelete);
-      
+
       this.logger.log(`Usuario ${deletedUserData.email} (ID: ${id}) eliminado exitosamente por ${superUser.email}`);
-      
+
       return deletedUserData;
     } catch (error) {
       this.logger.error(`Error eliminando usuario con ID: ${id} - ${error.message}`);

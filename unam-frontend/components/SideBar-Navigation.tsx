@@ -12,7 +12,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AuthModal } from "./auth/AuthModal";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { User, LogIn, UserPlus, LogOut } from "lucide-react";
 import { useState } from "react";
@@ -33,16 +32,25 @@ export default function AppSidebar() {
     <>
       <Sidebar>
         <SidebarHeader>
-          <div 
-            className="flex items-center gap-2 px-4 py-2 cursor-pointer rounded-lg"
-            onClick={() => router.push('/dashboard')}
-          >
+          <div className="flex items-center gap-2 px-4 py-2 cursor-pointer rounded-lg">
+            {/* Logo */}
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <span className="text-sm font-bold">É</span>
             </div>
+            {/* Texto */}
             <span className="font-semibold">Éskani</span>
+            {/* Botón de ayuda */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-2"
+              onClick={() => router.push('/help')}
+            >
+              ?
+            </Button>
           </div>
         </SidebarHeader>
+
         <SidebarContent>
           {user ? (
             <LearningContent />
@@ -55,6 +63,7 @@ export default function AppSidebar() {
             </div>
           )}
         </SidebarContent>
+
         <SidebarFooter>
           {user ? (
             <div className="px-4 py-2 space-y-3">
@@ -113,6 +122,7 @@ export default function AppSidebar() {
           )}
         </SidebarFooter>
       </Sidebar>
+
       <ErrorBoundary>
         <AuthModal
           isOpen={authModalOpen}

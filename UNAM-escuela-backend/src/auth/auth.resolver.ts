@@ -1,16 +1,15 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { AuthService } from './auth.service';
 import { AuthResponse } from './types/auth-response.type';
+import {
+  VerifyEmailResponse,
+  ResendVerificationCodeResponse,
+} from './types';
 import { LoginInput, SignupInput } from './dto/inputs';
-import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { CurrentUser } from './decorators/current-user.decorator';
-import { User } from 'src/users/entities/user.entity';
-import { ValidRoles } from './enums/valid-roles.enum';
 
 @Resolver()
 export class AuthResolver {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Mutation(() => AuthResponse, { name: 'signin' })
   signup(@Args('signUpInput') signupInput: SignupInput): Promise<AuthResponse> {
@@ -23,7 +22,26 @@ export class AuthResolver {
   }
 
   @Query(() => AuthResponse, { name: 'revalidate' })
-  async revalidateToken(@Args('token', { nullable: true }) token?: string): Promise<AuthResponse> {
+  async revalidateToken(
+    @Args('token', { nullable: true }) token?: string,
+  ): Promise<AuthResponse> {
     return this.authService.revalidateTokenFromString(token);
+  }
+
+  @Mutation(() => VerifyEmailResponse, { name: 'verifyEmailCode' })
+  verifyEmailCode(
+    @Args('email') email: string,
+    @Args('code') code: string,
+  ): Promise<VerifyEmailResponse> {
+    return this.authService.verifyEmailCode(email, code);
+  }
+
+  @Mutation(() => ResendVerificationCodeResponse, {
+    name: 'resendVerificationCode',
+  })
+  resendVerificationCode(
+    @Args('email') email: string,
+  ): Promise<ResendVerificationCodeResponse> {
+    return this.authService.resendVerificationCode(email);
   }
 }

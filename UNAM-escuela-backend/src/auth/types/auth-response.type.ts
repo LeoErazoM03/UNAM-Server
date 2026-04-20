@@ -3,10 +3,15 @@ import { User } from "src/users/entities/user.entity";
 
 @ObjectType()
 export class AuthResponse {
+    @Field(() => Boolean)
+    success: boolean;
 
-    @Field(()=>String)
-    token: string;
+    @Field(() => String)
+    message: string;
 
-    @Field(()=>User)
-    user: User
+    @Field(() => String, { nullable: true })
+    token?: string;
+
+    @Field(() => User, { nullable: true })
+    user?: User;
 }

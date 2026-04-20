@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   db:
     image: postgres:14.4
@@ -11,17 +13,14 @@ services:
     volumes:
       - ./DB/postgres:/var/lib/postgresql/data
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-postgres}",
-        ]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-postgres}" ]
       interval: 5s
       timeout: 5s
       retries: 20
       start_period: 30s
     networks:
       - unam-net
+
   pgadmin:
     image: dpage/pgadmin4
     environment:
@@ -33,6 +32,7 @@ services:
       - db
     networks:
       - unam-net
+
   backend:
     build:
       context: ./UNAM-escuela-backend
@@ -47,7 +47,7 @@ services:
     env_file:
       - .env
     ports:
-      - "3000:3000" # Backend en puerto 3000
+      - "3000:3000"
     volumes:
       - ./Markdown:/Markdown
       - ./UNAM-escuela-backend/uploads:/app/uploads
@@ -55,11 +55,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'node -e "require(''http'').get(''http://localhost:3000/graphql'', (r) => {process.exit(0)}).on(''error'', () => process.exit(1))"',
-        ]
+      test: [ "CMD-SHELL", 'node -e "require(''http'').get(''http://localhost:3000/graphql'', (r) => {process.exit(0)}).on(''error'', () => process.exit(1))"' ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -73,41 +69,28 @@ services:
       context: ./unam-frontend
       dockerfile: Dockerfile
       args:
-        # Para build time, usar el dominio público con HTTPS servido por Nginx
         NEXT_PUBLIC_BACKEND_URL: http://localhost:3000
         NEXT_PUBLIC_GRAPHQL_ENDPOINT: http://localhost:3000/graphql
     environment:
-      NODE_ENV: production
-      # Para runtime, usar el dominio público con HTTPS para el navegador del cliente
+      NODE_ENV: development
       NEXT_PUBLIC_BACKEND_URL: http://localhost:3000
       NEXT_PUBLIC_GRAPHQL_ENDPOINT: http://localhost:3000/graphql
-      # Para SSR, usar conexión interna de Docker
       SERVER_GRAPHQL_ENDPOINT: http://backend:3000/graphql
-      # Increase Node heap memory for Next.js
       NODE_OPTIONS: --max-old-space-size=1024
     env_file:
       - .env
     ports:
       - "3001:3001"
+    volumes:
+      - ./unam-frontend:/app # código local montado para hot reload
+      - ./logs/frontend:/app/logs/frontend
+      - /app/node_modules # evita conflictos de node_modules
     depends_on:
       - backend
-    volumes:
-      - ./logs/frontend:/app/logs/frontend
+    command: npm run dev # modo desarrollo con hot reload
     networks:
       - unam-net
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-        reservations:
-          memory: 1G
-    healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:3001 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
 
   nginx:
     image: nginx:1.25-alpine
@@ -136,14 +119,11 @@ services:
 
   backup-prod:
     image: alpine:latest
-    profiles: ["tools"]
+    profiles: [ "tools" ]
     volumes:
       - ./backups:/backups
     command: >
-      sh -c "apk add --no-cache openssh-client sshpass && 
-      sshpass -p '1nclusI0np4p1MEe.' ssh -o StrictHostKeyChecking=no -p 7824 root@132.247.186.91 
-      'docker exec -e PGPASSWORD=MySecretPassword123@ unam-server-db-1 pg_dump -U postgres postgres' > /backups/prod_backup_$$(date +%Y%m%d_%H%M%S).sql &&
-      echo 'Backup completed successfully'"
+      sh -c "apk add --no-cache openssh-client sshpass &&  sshpass -p '1nclusI0np4p1MEe.' ssh -o StrictHostKeyChecking=no -p 7824 root@132.247.186.91  'docker exec -e PGPASSWORD=MySecretPassword123@ unam-server-db-1 pg_dump -U postgres postgres' > /backups/prod_backup_$$(date +%Y%m%d_%H%M%S).sql && echo 'Backup completed successfully'"
     networks:
       - unam-net
 
