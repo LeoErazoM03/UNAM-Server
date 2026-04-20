@@ -40,8 +40,10 @@ export class AuthService {
 
   async signup(signupInput: SignupInput): Promise<AuthResponse> {
     try {
-      this.logger.log(`Intento de registro para email: ${signupInput.email}`);
+      const normalizedEmail = signupInput.email.trim().toLowerCase();
+      signupInput.email = normalizedEmail;
 
+      this.logger.log(`Intento de registro para email: ${signupInput.email}`);
       const user = await this.usersService.create(signupInput);
 
       const verificationCode = this.generateVerificationCode();
@@ -81,11 +83,12 @@ export class AuthService {
 
   async login(loginInput: LoginInput): Promise<AuthResponse> {
     try {
-      const { email, password } = loginInput;
+      const email = loginInput.email.trim().toLowerCase();
+      const { password } = loginInput;
+
       this.logger.log(`Intento de login para email: ${email}`);
 
       const user = await this.usersService.findOneByEmailWithVerificationCode(email);
-
       if (!bcrypt.compareSync(password, user.password)) {
         throw new UnauthorizedException('Credenciales incorrectas');
       }
@@ -123,7 +126,11 @@ export class AuthService {
     code: string,
   ): Promise<VerifyEmailResponse> {
     try {
-      const user = await this.usersService.findOneByEmailWithVerificationCode(email);
+      const normalizedEmail = email.trim().toLowerCase();
+
+      const user = await this.usersService.findOneByEmailWithVerificationCode(
+        normalizedEmail,
+      );
 
       if (user.is_verified) {
         throw new BadRequestException('Este correo ya fue verificado');
@@ -180,11 +187,31 @@ export class AuthService {
   async resendVerificationCode(
     email: string,
   ): Promise<ResendVerificationCodeResponse> {
+    const neutralResponse: ResendVerificationCodeResponse = {
+      success: true,
+      message: 'Si el correo existe, se envió un código de verificación',
+    };
+
     try {
-      const user = await this.usersService.findOneByEmailWithVerificationCode(email);
+      const normalizedEmail = email.trim().toLowerCase();
+
+      const user =
+        await this.usersService.findOneByEmailWithVerificationCodeNullable(
+          normalizedEmail,
+        );
+
+      if (!user) {
+        this.logger.warn(
+          `Solicitud de reenvío para correo no encontrado: ${normalizedEmail}`,
+        );
+        return neutralResponse;
+      }
 
       if (user.is_verified) {
-        throw new BadRequestException('Este correo ya fue verificado');
+        this.logger.log(
+          `Solicitud de reenvío ignorada para correo ya verificado: ${normalizedEmail}`,
+        );
+        return neutralResponse;
       }
 
       const now = new Date();
@@ -193,9 +220,10 @@ export class AuthService {
         user.verification_last_sent_at &&
         now.getTime() - new Date(user.verification_last_sent_at).getTime() < 60 * 1000
       ) {
-        throw new BadRequestException(
-          'Debes esperar al menos 1 minuto antes de solicitar otro código',
+        this.logger.warn(
+          `Solicitud de reenvío antes del tiempo mínimo para: ${normalizedEmail}`,
         );
+        return neutralResponse;
       }
 
       const verificationCode = this.generateVerificationCode();
@@ -215,15 +243,17 @@ export class AuthService {
         verificationCode,
       );
 
-      this.logger.log(`Código de verificación reenviado para ${user.email}`);
+      this.logger.log(
+        `Código de verificación reenviado correctamente para ${normalizedEmail}`,
+      );
 
-      return {
-        success: true,
-        message: 'Se envió un nuevo código de verificación al correo',
-      };
+      return neutralResponse;
     } catch (error) {
-      this.logger.error(`Error reenviando código: ${error.message}`);
-      throw error;
+      this.logger.error(
+        `Error controlado reenviando código para email: ${email} - ${error.message}`,
+      );
+
+      return neutralResponse;
     }
   }
 

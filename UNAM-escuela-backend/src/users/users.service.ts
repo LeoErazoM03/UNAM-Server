@@ -27,10 +27,13 @@ export class UsersService {
   async create(signupInput: SignupInput): Promise<User> {
     try {
       this.logger.log(`Creando nuevo usuario con email: ${signupInput.email}`);
+      const normalizedEmail = signupInput.email.trim().toLowerCase();
+
       const newUser = this.usersRepository.create({
         ...signupInput,
+        email: normalizedEmail,
         password: bcrypt.hashSync(signupInput.password, 10),
-        roles: ['alumno'], // Asigna automáticamente el rol de alumno
+        roles: ['alumno'],
       });
       const savedUser = await this.usersRepository.save(newUser);
       this.logger.log(
@@ -147,6 +150,29 @@ export class UsersService {
     } catch (error) {
       this.logger.error(
         `Error buscando usuario por email con código de verificación: ${email} - ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  async findOneByEmailWithVerificationCodeNullable(email: string): Promise<User | null> {
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+
+      this.logger.log(
+        `Buscando usuario por email de forma silenciosa: ${normalizedEmail}`,
+      );
+
+      const user = await this.usersRepository
+        .createQueryBuilder('user')
+        .addSelect('user.verification_code_hash')
+        .where('LOWER(user.email) = LOWER(:email)', { email: normalizedEmail })
+        .getOne();
+
+      return user ?? null;
+    } catch (error) {
+      this.logger.error(
+        `Error en búsqueda silenciosa por email: ${email} - ${error.message}`,
       );
       throw error;
     }
