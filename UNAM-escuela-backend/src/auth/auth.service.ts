@@ -1,5 +1,14 @@
-import { Injectable, UnauthorizedException, Logger, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  Logger,
+  BadRequestException,
+} from '@nestjs/common';
 import { AuthResponse } from './types/auth-response.type';
+import {
+  VerifyEmailResponse,
+  ResendVerificationCodeResponse,
+} from './types';
 import { UsersService } from 'src/users/users.service';
 import { LoginInput, SignupInput } from './dto/inputs';
 import * as bcrypt from 'bcrypt';
@@ -37,7 +46,7 @@ export class AuthService {
 
       const verificationCode = this.generateVerificationCode();
       const verificationCodeHash = await this.hashVerificationCode(verificationCode);
-      const verificationCodeExpires = new Date(Date.now() + 1000 * 60 * 60); // 1 hora
+      const verificationCodeExpires = new Date(Date.now() + 1000 * 60 * 60);
 
       user.is_verified = false;
       user.verification_code_hash = verificationCodeHash;
@@ -58,6 +67,8 @@ export class AuthService {
       );
 
       return {
+        success: true,
+        message: 'Registro exitoso. Revisa tu correo para verificar tu cuenta.',
         user,
       };
     } catch (error) {
@@ -74,6 +85,7 @@ export class AuthService {
       this.logger.log(`Intento de login para email: ${email}`);
 
       const user = await this.usersService.findOneByEmailWithVerificationCode(email);
+
       if (!bcrypt.compareSync(password, user.password)) {
         throw new UnauthorizedException('Credenciales incorrectas');
       }
@@ -92,7 +104,12 @@ export class AuthService {
 
       this.logger.log(`Login exitoso para usuario: ${user.email} (ID: ${user.id})`);
 
-      return { token, user };
+      return {
+        success: true,
+        message: 'Inicio de sesión exitoso',
+        token,
+        user,
+      };
     } catch (error) {
       this.logger.error(
         `Error en login para email: ${loginInput.email} - ${error.message}`,
@@ -101,10 +118,13 @@ export class AuthService {
     }
   }
 
-  // VERIFICACIÓN DE EMAIL
-  async verifyEmailCode(email: string, code: string): Promise<boolean> {
+  async verifyEmailCode(
+    email: string,
+    code: string,
+  ): Promise<VerifyEmailResponse> {
     try {
       const user = await this.usersService.findOneByEmailWithVerificationCode(email);
+
       if (user.is_verified) {
         throw new BadRequestException('Este correo ya fue verificado');
       }
@@ -141,20 +161,28 @@ export class AuthService {
 
       await this.usersService.save(user);
 
+      const token = this.getJwtToken(user.id);
+
       this.logger.log(`Usuario verificado correctamente: ${user.email}`);
 
-      return true;
+      return {
+        success: true,
+        message: 'Correo verificado correctamente',
+        user,
+        token,
+      };
     } catch (error) {
       this.logger.error(`Error verificando email: ${error.message}`);
       throw error;
     }
   }
 
-
-  // REENVÍO DE CÓDIGO
-  async resendVerificationCode(email: string): Promise<boolean> {
+  async resendVerificationCode(
+    email: string,
+  ): Promise<ResendVerificationCodeResponse> {
     try {
       const user = await this.usersService.findOneByEmailWithVerificationCode(email);
+
       if (user.is_verified) {
         throw new BadRequestException('Este correo ya fue verificado');
       }
@@ -189,7 +217,10 @@ export class AuthService {
 
       this.logger.log(`Código de verificación reenviado para ${user.email}`);
 
-      return true;
+      return {
+        success: true,
+        message: 'Se envió un nuevo código de verificación al correo',
+      };
     } catch (error) {
       this.logger.error(`Error reenviando código: ${error.message}`);
       throw error;
@@ -218,7 +249,13 @@ export class AuthService {
     }
 
     const token = this.getJwtToken(user.id);
-    return { token, user };
+
+    return {
+      success: true,
+      message: 'Token revalidado correctamente',
+      token,
+      user,
+    };
   }
 
   async revalidateTokenFromString(token?: string): Promise<AuthResponse> {
@@ -233,7 +270,12 @@ export class AuthService {
 
       const newToken = this.getJwtToken(user.id);
 
-      return { token: newToken, user };
+      return {
+        success: true,
+        message: 'Token revalidado correctamente',
+        token: newToken,
+        user,
+      };
     } catch {
       throw new UnauthorizedException('Token inválido o expirado');
     }

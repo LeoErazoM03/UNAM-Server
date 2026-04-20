@@ -62,7 +62,16 @@ export default function VerificarEmailClient() {
                 body: JSON.stringify({
                     query: `
             mutation VerifyEmailCode($email: String!, $code: String!) {
-              verifyEmailCode(email: $email, code: $code)
+              verifyEmailCode(email: $email, code: $code) {
+                success
+                message
+                token
+                user {
+                  id
+                  email
+                  fullName
+                }
+              }
             }
           `,
                     variables: {
@@ -80,14 +89,19 @@ export default function VerificarEmailClient() {
                 return;
             }
 
-            if (data.data?.verifyEmailCode === true) {
+            const result = data.data?.verifyEmailCode;
+
+            if (result?.success) {
                 setState('success');
-                setMessage('Tu cuenta fue verificada correctamente. Ya puedes iniciar sesión.');
+                setMessage(
+                    result.message ||
+                    'Tu cuenta fue verificada correctamente. Ya puedes iniciar sesión.',
+                );
                 return;
             }
 
             setState('error');
-            setMessage('No fue posible verificar tu correo.');
+            setMessage(result?.message || 'No fue posible verificar tu correo.');
         } catch (error) {
             console.error('Error verificando código:', error);
             setState('error');
@@ -115,7 +129,10 @@ export default function VerificarEmailClient() {
                 body: JSON.stringify({
                     query: `
             mutation ResendVerificationCode($email: String!) {
-              resendVerificationCode(email: $email)
+              resendVerificationCode(email: $email) {
+                success
+                message
+              }
             }
           `,
                     variables: { email },
@@ -130,14 +147,18 @@ export default function VerificarEmailClient() {
                 return;
             }
 
-            if (data.data?.resendVerificationCode === true) {
+            const result = data.data?.resendVerificationCode;
+
+            if (result?.success) {
                 setState('idle');
-                setMessage('Te enviamos un nuevo código de verificación a tu correo.');
+                setMessage(
+                    result.message || 'Te enviamos un nuevo código de verificación a tu correo.',
+                );
                 return;
             }
 
             setState('error');
-            setMessage('No fue posible reenviar el código.');
+            setMessage(result?.message || 'No fue posible reenviar el código.');
         } catch (error) {
             console.error('Error reenviando código:', error);
             setState('error');

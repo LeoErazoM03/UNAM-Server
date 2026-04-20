@@ -1,12 +1,11 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { AuthService } from './auth.service';
 import { AuthResponse } from './types/auth-response.type';
+import {
+  VerifyEmailResponse,
+  ResendVerificationCodeResponse,
+} from './types';
 import { LoginInput, SignupInput } from './dto/inputs';
-import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { CurrentUser } from './decorators/current-user.decorator';
-import { User } from 'src/users/entities/user.entity';
-import { ValidRoles } from './enums/valid-roles.enum';
 
 @Resolver()
 export class AuthResolver {
@@ -29,18 +28,20 @@ export class AuthResolver {
     return this.authService.revalidateTokenFromString(token);
   }
 
-  @Mutation(() => Boolean, { name: 'verifyEmailCode' })
+  @Mutation(() => VerifyEmailResponse, { name: 'verifyEmailCode' })
   verifyEmailCode(
     @Args('email') email: string,
     @Args('code') code: string,
-  ): Promise<boolean> {
+  ): Promise<VerifyEmailResponse> {
     return this.authService.verifyEmailCode(email, code);
   }
 
-  @Mutation(() => Boolean, { name: 'resendVerificationCode' })
+  @Mutation(() => ResendVerificationCodeResponse, {
+    name: 'resendVerificationCode',
+  })
   resendVerificationCode(
     @Args('email') email: string,
-  ): Promise<boolean> {
+  ): Promise<ResendVerificationCodeResponse> {
     return this.authService.resendVerificationCode(email);
   }
 }
