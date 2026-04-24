@@ -44,6 +44,7 @@ const AccessibilityButton: React.FC<AccessibilityButtonProps> = ({
 
   const button = (
     <Button
+      id="accessibility-btn"
       onClick={handleClick}
       className={buttonClasses}
       aria-label="Abrir menú de accesibilidad"

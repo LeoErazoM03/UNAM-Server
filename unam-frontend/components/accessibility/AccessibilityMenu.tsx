@@ -132,7 +132,7 @@ const AccessibilityMenu: React.FC = () => {
   return (
     <Dialog open={isMenuOpen} onOpenChange={setIsMenuOpen}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+        <DialogHeader id="accessibility-menu-header">
           <DialogTitle className="flex items-center gap-2">
             <PersonStanding className="h-5 w-5" />
             Menú de Accesibilidad
@@ -144,7 +144,7 @@ const AccessibilityMenu: React.FC = () => {
 
         <div className="space-y-6">
           {/* Temas Visuales */}
-          <Card>
+          <Card id="accessibility-themes-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Palette className="h-4 w-4" />
@@ -184,7 +184,7 @@ const AccessibilityMenu: React.FC = () => {
           </Card>
 
           {/* Ajustes Tipográficos */}
-          <Card>
+          <Card id="accessibility-typography-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Type className="h-4 w-4" />
@@ -252,7 +252,7 @@ const AccessibilityMenu: React.FC = () => {
           </Card>
 
           {/* Funcionalidades Adicionales */}
-          <Card>
+          <Card id="accessibility-features-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Brain className="h-4 w-4" />
@@ -300,7 +300,7 @@ const AccessibilityMenu: React.FC = () => {
           </Card>
 
           {/* Botón de Reset */}
-          <div className="flex justify-center pt-4">
+          <div id="accessibility-reset-btn" className="flex justify-center pt-4">
             <Button
               variant="outline"
               onClick={handleResetSettings}
